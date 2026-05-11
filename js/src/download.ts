@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { createWriteStream } from "node:fs";
-import { extract as tarExtract } from "tar";
+import { extract as tarExtract, list as tarList } from "tar";
 
 import type { BinaryInfo } from "./types.js";
 import {
@@ -402,16 +402,20 @@ async function extractArchive(
 }
 
 async function extractTar(archivePath: string, destDir: string): Promise<void> {
+  await validateTarArchive(archivePath);
   await tarExtract({
     file: archivePath,
     cwd: destDir,
     strip: 0,
-    filter: (entryPath: string) => {
-      if (path.isAbsolute(entryPath) || entryPath.includes("..")) {
-        console.warn(
-          `[cloakbrowser] Skipping suspicious archive entry: ${entryPath}`
+    preservePaths: false,
+    strict: true,
+    filter: (entryPath: string, entry: any) => {
+      assertSafeArchivePath(entryPath, "Archive contains path traversal");
+      if (entry.linkpath) {
+        assertSafeArchivePath(
+          entry.linkpath,
+          "Archive contains unsafe link target"
         );
-        return false;
       }
       return true;
     },
@@ -425,11 +429,23 @@ async function extractZip(archivePath: string, destDir: string): Promise<void> {
   if (process.platform === "win32") {
     // PowerShell 5.1's Expand-Archive uses .NET FileStream which can conflict
     // with recently-closed Node.js file handles. Use ZipFile API directly.
+    const extractScript = [
+      "Add-Type -AssemblyName System.IO.Compression.FileSystem",
+      "[System.IO.Compression.ZipFile]::ExtractToDirectory($env:CLOAKBROWSER_ARCHIVE_PATH, $env:CLOAKBROWSER_DEST_DIR)",
+    ].join("; ");
     execFileSync("powershell", [
-      "-NoProfile", "-Command",
-      `Add-Type -AssemblyName System.IO.Compression.FileSystem; ` +
-      `[System.IO.Compression.ZipFile]::ExtractToDirectory('${archivePath}', '${destDir}')`,
-    ], { timeout: 120_000 });
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      extractScript,
+    ], {
+      timeout: 120_000,
+      env: {
+        ...process.env,
+        CLOAKBROWSER_ARCHIVE_PATH: archivePath,
+        CLOAKBROWSER_DEST_DIR: destDir,
+      },
+    });
   } else {
     execFileSync("unzip", ["-o", archivePath, "-d", destDir], { timeout: 120_000 });
   }
@@ -469,11 +485,70 @@ function removeQuarantine(dirPath: string): void {
 
 function isExecutable(filePath: string): boolean {
   try {
+    if (!fs.statSync(filePath).isFile()) {
+      return false;
+    }
+    if (process.platform === "win32") {
+      const pathext = (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
+        .split(";")
+        .map((ext) => ext.trim().toLowerCase())
+        .filter(Boolean);
+      return pathext.includes(path.extname(filePath).toLowerCase());
+    }
     fs.accessSync(filePath, fs.constants.X_OK);
     return true;
   } catch {
     return false;
   }
+}
+
+function normalizeArchivePath(entryPath: string): string {
+  return entryPath.replace(/\\/g, "/");
+}
+
+function isSafeArchivePath(entryPath: string): boolean {
+  const normalized = normalizeArchivePath(entryPath);
+  if (!normalized) {
+    return false;
+  }
+  if (/^[A-Za-z]:/.test(normalized)) {
+    return false;
+  }
+  if (normalized.startsWith("/")) {
+    return false;
+  }
+  return !normalized.split("/").includes("..");
+}
+
+function assertSafeArchivePath(entryPath: string, label: string): void {
+  if (!isSafeArchivePath(entryPath)) {
+    throw new Error(`${label}: ${entryPath}`);
+  }
+}
+
+async function validateTarArchive(archivePath: string): Promise<void> {
+  await tarList({
+    file: archivePath,
+    onReadEntry: (entry: any) => {
+      assertSafeArchivePath(entry.path || "", "Archive contains path traversal");
+      if (entry.linkpath) {
+        assertSafeArchivePath(
+          entry.linkpath,
+          "Archive contains unsafe link target"
+        );
+      }
+    },
+  });
+}
+
+/** @internal Exported for testing only. */
+export function isExecutableForTest(filePath: string): boolean {
+  return isExecutable(filePath);
+}
+
+/** @internal Exported for testing only. */
+export function isSafeArchivePathForTest(entryPath: string): boolean {
+  return isSafeArchivePath(entryPath);
 }
 
 // ---------------------------------------------------------------------------

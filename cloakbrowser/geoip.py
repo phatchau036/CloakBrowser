@@ -84,12 +84,20 @@ def resolve_proxy_geo_with_ip(
     timeout = _get_geoip_timeout_seconds()
     deadline = _deadline_from_timeout(timeout)
 
-    # Exit IP (through proxy) is most accurate — gateway DNS may differ from exit
-    ip = _resolve_exit_ip(proxy_url, timeout=_remaining_seconds(deadline))
-    if ip is None and not _deadline_expired(deadline):
-        ip = _resolve_proxy_ip(proxy_url)
-    if ip is None or _deadline_expired(deadline):
-        if deadline is not None and _deadline_expired(deadline):
+    # Exit IP (through proxy) is most accurate - gateway DNS may differ from exit
+    remaining = _remaining_seconds(deadline)
+    ip, timed_out = _call_with_timeout(
+        lambda: _resolve_exit_ip(proxy_url, timeout=remaining),
+        remaining,
+    )
+    if ip is None and not timed_out and not _deadline_expired(deadline):
+        remaining = _remaining_seconds(deadline)
+        ip, timed_out = _call_with_timeout(
+            lambda: _resolve_proxy_ip(proxy_url),
+            remaining,
+        )
+    if ip is None or timed_out or _deadline_expired(deadline):
+        if timed_out or (deadline is not None and _deadline_expired(deadline)):
             logger.warning("GeoIP resolution timed out after %.1fs; continuing without GeoIP", timeout)
         return None, None, None
 
@@ -196,13 +204,40 @@ def _deadline_expired(deadline: float | None) -> bool:
     return deadline is not None and time.monotonic() >= deadline
 
 
+def _call_with_timeout(func, timeout: float | None):
+    """Run a blocking helper with a hard wall-clock timeout."""
+    if timeout is None:
+        return func(), False
+
+    result = {"value": None, "error": None}
+
+    def _runner() -> None:
+        try:
+            result["value"] = func()
+        except Exception as exc:  # pragma: no cover - exercised via callers
+            result["error"] = exc
+
+    worker = threading.Thread(target=_runner, daemon=True)
+    worker.start()
+    worker.join(timeout)
+    if worker.is_alive():
+        return None, True
+    if result["error"] is not None:
+        raise result["error"]
+    return result["value"], False
+
+
 def resolve_proxy_exit_ip(proxy_url: str) -> str | None:
     """Resolve only the proxy exit IP, bounded by the GeoIP timeout."""
     timeout = _get_geoip_timeout_seconds()
     deadline = _deadline_from_timeout(timeout)
-    ip = _resolve_exit_ip(proxy_url, timeout=timeout)
-    if ip is None and _deadline_expired(deadline):
+    ip, timed_out = _call_with_timeout(
+        lambda: _resolve_exit_ip(proxy_url, timeout=timeout),
+        timeout,
+    )
+    if timed_out or _deadline_expired(deadline):
         logger.warning("GeoIP resolution timed out after %.1fs; continuing without GeoIP", timeout)
+        return None
     return ip
 
 

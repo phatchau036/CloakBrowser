@@ -128,21 +128,14 @@ Open [http://localhost:8080](http://localhost:8080). Create a profile. Click **L
 
 ---
 
-## Latest: v0.3.26 (Chromium 146.0.7680.177.4)
+## Latest: v0.3.28 (Chromium 146.0.7680.177.4)
 
-- **`launch_context_async()`** — async counterpart to `launch_context()`. Forwards kwargs to `browser.new_context()` for `storage_state`, `permissions`, `extra_http_headers` without a persistent profile folder.
-- **JS `contextOptions` escape hatch** — forward arbitrary options (including `storageState`) to Playwright's `newContext()` from `launchContext()` / `launchPersistentContext()`.
-- **Native SOCKS5 proxy** — `proxy="socks5://user:pass@host:port"` works directly in all launch functions, Python + JS. QUIC/HTTP3 tunnels through SOCKS5 via UDP ASSOCIATE.
-- **Chromium 146 upgrade** — rebased all patches from 145.0.7632.x to 146.0.7680.177
-- **57 fingerprint patches** — additional detection-vector coverage (WebAuthn, AAC audio, window position) and WebGL/canvas consistency fixes
-- **WebRTC IP spoofing** — `--fingerprint-webrtc-ip=auto` resolves your proxy's exit IP and spoofs WebRTC ICE candidates. Auto-injected when using `geoip=True` (no extra network call)
-- **Proxy signal removal** — DNS/connect/SSL timing zeroed, proxy cache headers stripped, Proxy-Connection header leak removed
-- **`cloakserve` CDP multiplexer** — rewritten as a multi-connection CDP proxy with per-connection fingerprint seeds
-- **Humanize CDP isolation** — keyboard events now use isolated worlds and trusted dispatch for better behavioral stealth
-- **`humanize=True`** — one flag makes all mouse, keyboard, and scroll interactions behave like a real user. Bézier curves, per-character typing, realistic scroll patterns
-- **Stealthy with zero flags** — binary auto-generates a random fingerprint seed at startup. No configuration required
-- **Timezone & locale from proxy IP** — `launch(proxy="...", geoip=True)` auto-detects timezone and locale
-- **Persistent profiles** — `launch_persistent_context()` keeps cookies and localStorage across sessions, bypasses incognito detection
+- **`cloakserve` security hardening** — fingerprint seed sanitization, localhost bind on bare metal, and Podman-aware container detection
+- **GeoIP timeout guard** — proxy geolocation lookup is bounded so failed proxies cannot stall launch indefinitely
+- **JS humanize frame fixes** — `check()`, `uncheck()`, and `selectOption()` now preserve iframe scope correctly
+- **Humanized method typing improvements** — stronger TypeScript coverage for per-call humanized action options
+- **SOCKS5 proxy logging clarity** — wrapper now logs when special characters in SOCKS5 credentials are auto-encoded
+- **Playwright peer minimum updated** — JS wrapper now documents and tests against newer `playwright-core` minimums
 
 See the full [CHANGELOG.md](CHANGELOG.md) for details.
 

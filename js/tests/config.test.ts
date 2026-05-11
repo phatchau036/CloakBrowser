@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   CHROMIUM_VERSION,
   getArchiveExt,
+  getArchiveName,
   getChromiumVersion,
   getDefaultStealthArgs,
   getCacheDir,
@@ -65,7 +66,7 @@ describe("config", () => {
     const url = getDownloadUrl();
     expect(url).toContain(getChromiumVersion());
     expect(url).toContain("cloakbrowser-");
-    expect(url).toContain(".tar.gz");
+    expect(url).toContain(getArchiveName());
     expect(url).toContain("cloakbrowser.dev");
   });
 });

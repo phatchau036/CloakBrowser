@@ -49,6 +49,10 @@ AGENTS.md
 
 # Private docs (launch posts, strategy)
 docs/
+!docs/
+docs/*
+!docs/codex/
+!docs/codex/**
 
 # Internal test infrastructure (Docker, VPS-specific)
 test-infra/

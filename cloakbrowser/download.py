@@ -365,6 +365,12 @@ def _flatten_single_subdir(dest_dir: Path) -> None:
 
 def _is_executable(path: Path) -> bool:
     """Check if a file is executable."""
+    if not path.exists() or not path.is_file():
+        return False
+    if platform.system() == "Windows":
+        pathext = os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD")
+        allowed = {ext.strip().lower() for ext in pathext.split(";") if ext.strip()}
+        return path.suffix.lower() in allowed
     return os.access(path, os.X_OK)
 
 

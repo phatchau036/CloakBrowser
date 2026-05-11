@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import {
   CHROMIUM_VERSION,
+  getArchiveName,
   getChromiumVersion,
   getDownloadUrl,
   getEffectiveVersion,
@@ -16,6 +17,8 @@ import {
   ensureBinary,
   fetchChecksums,
   getLatestChromiumVersion,
+  isExecutableForTest,
+  isSafeArchivePathForTest,
   parseChecksums,
   resetWrapperUpdateChecked,
 } from "../src/download.js";
@@ -68,7 +71,7 @@ describe("download URL", () => {
     const url = getDownloadUrl();
     expect(url).toContain("cloakbrowser.dev");
     expect(url).toContain(`chromium-v${getChromiumVersion()}`);
-    expect(url.endsWith(".tar.gz")).toBe(true);
+    expect(url.endsWith(getArchiveName())).toBe(true);
   });
 
   it("accepts custom version", () => {
@@ -83,10 +86,15 @@ describe("download URL", () => {
 });
 
 describe("latest version (platform-aware)", () => {
-  const platformTarball = `cloakbrowser-${getPlatformTag()}.tar.gz`;
+  const platformTarball = getArchiveName();
+
+  function archiveNameForPlatform(platformTag: string): string {
+    const ext = platformTag === "windows-x64" ? ".zip" : ".tar.gz";
+    return `cloakbrowser-${platformTag}${ext}`;
+  }
 
   function makeAssets(platforms: string[]) {
-    return platforms.map((p) => ({ name: `cloakbrowser-${p}.tar.gz` }));
+    return platforms.map((p) => ({ name: archiveNameForPlatform(p) }));
   }
 
   function mockFetch(releases: Array<Record<string, unknown>>) {
@@ -279,7 +287,7 @@ describe("download fallback", () => {
   it("checksum fetch falls back to GitHub on primary 429", async () => {
     const HASH =
       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-    const checksumText = `${HASH}  cloakbrowser-${getPlatformTag()}.tar.gz`;
+    const checksumText = `${HASH}  ${getArchiveName()}`;
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url =
@@ -301,9 +309,7 @@ describe("download fallback", () => {
 
     const result = await fetchChecksums();
     expect(result).not.toBeNull();
-    expect(
-      result!.has(`cloakbrowser-${getPlatformTag()}.tar.gz`)
-    ).toBe(true);
+    expect(result!.has(getArchiveName())).toBe(true);
   });
 
   it("checksum fetch returns null when both sources fail", async () => {
@@ -346,6 +352,45 @@ describe("ensureBinary", () => {
   it("throws when local override path missing", async () => {
     process.env.CLOAKBROWSER_BINARY_PATH = "/nonexistent/chrome";
     await expect(ensureBinary()).rejects.toThrow("does not exist");
+  });
+});
+
+describe("archive safety helpers", () => {
+  it("accepts normal relative archive paths", () => {
+    expect(isSafeArchivePathForTest("Chromium.app/Contents/MacOS/Chromium")).toBe(true);
+  });
+
+  it("rejects parent traversal archive paths", () => {
+    expect(isSafeArchivePathForTest("../evil")).toBe(false);
+  });
+
+  it("rejects drive-relative archive paths", () => {
+    expect(isSafeArchivePathForTest("C:evil")).toBe(false);
+  });
+});
+
+describe("isExecutableForTest", () => {
+  it("requires a Windows executable suffix on win32", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const tmpDir = mkdtempSync(path.join(os.tmpdir(), "cloakbrowser-exec-"));
+
+    try {
+      const exePath = path.join(tmpDir, "chrome.exe");
+      const plainPath = path.join(tmpDir, "chrome");
+      writeFileSync(exePath, "binary");
+      writeFileSync(plainPath, "binary");
+
+      if (process.platform === "win32") {
+        expect(isExecutableForTest(exePath)).toBe(true);
+        expect(isExecutableForTest(plainPath)).toBe(false);
+      } else {
+        expect(isExecutableForTest(plainPath)).toBe(false);
+      }
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });
 

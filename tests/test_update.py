@@ -11,6 +11,7 @@ import pytest
 
 from cloakbrowser.config import (
     CHROMIUM_VERSION,
+    get_archive_name,
     _version_newer,
     _version_tuple,
     get_chromium_version,
@@ -74,7 +75,7 @@ class TestDownloadUrl:
         url = get_download_url()
         assert "cloakbrowser.dev" in url
         assert f"chromium-v{get_chromium_version()}" in url
-        assert url.endswith(".tar.gz")
+        assert url.endswith(get_archive_name())
 
     def test_custom_version_url(self):
         url = get_download_url("145.0.7718.0")
@@ -159,9 +160,14 @@ class TestEffectiveVersion:
 class TestGetLatestVersion:
     """Tests for _get_latest_chromium_version with platform-aware asset checking."""
 
+    @staticmethod
+    def _archive_name_for_platform(platform_tag: str) -> str:
+        ext = ".zip" if platform_tag == "windows-x64" else ".tar.gz"
+        return f"cloakbrowser-{platform_tag}{ext}"
+
     def _make_assets(self, platforms: list[str]) -> list[dict]:
         """Helper to build asset list from platform tags."""
-        return [{"name": f"cloakbrowser-{p}.tar.gz"} for p in platforms]
+        return [{"name": self._archive_name_for_platform(p)} for p in platforms]
 
     def _platform_tarball(self) -> str:
         return f"cloakbrowser-{get_platform_tag()}.tar.gz"

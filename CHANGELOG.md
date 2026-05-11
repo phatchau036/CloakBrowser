@@ -8,6 +8,14 @@ Changes are tagged: **[wrapper]** for Python/JS wrapper, **[binary]** for Chromi
 
 ## [Unreleased]
 
+- **[wrapper]** Python: enforce a hard wall-clock timeout around GeoIP resolution so stalled proxy lookups cannot hang launch on Windows
+- **[wrapper]** Python: fix executable detection on Windows by checking file type plus executable suffix instead of relying on `os.access(..., X_OK)`
+- **[wrapper]** JS: harden tar extraction with pre-validation of archive paths and link targets before extraction
+- **[wrapper]** JS: remove PowerShell path interpolation from Windows ZIP extraction and pass paths through environment variables instead
+- **[security]** JS: bump `tar`, `puppeteer-core`, and `vitest`, plus override transitive `ip-address`, bringing `npm audit` to zero findings
+- **[tests]** Make Python and JS update/archive/path tests platform-aware on Windows, macOS, and Linux
+- **[docs]** Add `docs/codex/*` audit, security, feature-gap, todo, and project-memory handoff notes
+
 ## [0.3.28] — 2026-05-11
 
 - **[wrapper]** **Security**: `cloakserve` — sanitize fingerprint seed to prevent path traversal, bind to `127.0.0.1` on bare metal, detect Podman containers (#217)

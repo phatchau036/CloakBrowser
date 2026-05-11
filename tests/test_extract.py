@@ -180,9 +180,9 @@ class TestPermissions:
         assert _is_executable(binary)
 
     def test_is_executable_true(self, tmp_path):
-        binary = tmp_path / "chrome"
+        binary = tmp_path / ("chrome.exe" if platform.system() == "Windows" else "chrome")
         binary.write_bytes(b"binary")
-        binary.chmod(0o755)
+        binary.chmod(0o644 if platform.system() == "Windows" else 0o755)
         assert _is_executable(binary)
 
     def test_is_executable_false(self, tmp_path):

@@ -20,10 +20,14 @@ vi.mock("../src/geoip.js", () => ({
 describe("puppeteer launch", () => {
   let puppeteerMock: any;
   let mockBrowser: any;
+  let geoipMock: any;
+  let downloadMock: any;
 
   beforeEach(async () => {
     delete process.env.CLOAKBROWSER_BINARY_PATH;
     puppeteerMock = await import("puppeteer-core");
+    geoipMock = await import("../src/geoip.js");
+    downloadMock = await import("../src/download.js");
     mockBrowser = {
       newPage: vi.fn().mockResolvedValue({
         authenticate: vi.fn(),
@@ -31,10 +35,15 @@ describe("puppeteer launch", () => {
       close: vi.fn(),
     };
     vi.mocked(puppeteerMock.default.launch).mockResolvedValue(mockBrowser);
+    vi.mocked(downloadMock.ensureBinary).mockResolvedValue("/fake/chrome");
+    vi.mocked(geoipMock.maybeResolveGeoip).mockResolvedValue({});
+    vi.mocked(geoipMock.resolveWebrtcArgs).mockImplementation(
+      (opts: any) => Promise.resolve(opts.args)
+    );
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("calls ensureBinary and launches with binary path", async () => {
